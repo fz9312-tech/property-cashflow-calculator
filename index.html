@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Australia Property Cashflow Reality Calculator</title>
+  <style>
+    body { font-family: system-ui, Arial; max-width: 920px; margin: 24px auto; padding: 0 16px; }
+    h1 { font-size: 1.6rem; margin-bottom: 8px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .card { border: 1px solid #e5e7eb; border-radius: 14px; padding: 14px; box-shadow: 0 1px 6px rgba(0,0,0,.04); }
+    label { display: block; font-size: .9rem; margin-bottom: 6px; color: #111827; }
+    input { width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 10px; font-size: 1rem; }
+    .muted { color: #6b7280; font-size: .9rem; }
+    .results { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .row { display: flex; justify-content: space-between; gap: 10px; padding: 8px 0; border-bottom: 1px dashed #e5e7eb; }
+    .row:last-child { border-bottom: none; }
+    .badge { display: inline-block; padding: 6px 10px; border-radius: 999px; font-weight: 700; font-size: .9rem; }
+    .good { background: #dcfce7; color: #166534; }
+    .mid  { background: #fef9c3; color: #854d0e; }
+    .bad  { background: #fee2e2; color: #991b1b; }
+    button { width: 100%; padding: 12px; border: 0; border-radius: 12px; font-size: 1rem; font-weight: 700; cursor: pointer; }
+    .cta { background: #111827; color: white; }
+    .small { font-size: .85rem; }
+    @media (max-width: 740px) { .grid, .results { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <h1>Australia Property Cashflow Reality Calculator</h1>
+  <p class="muted">A quick reality check for investment property cashflow (before tax). Numbers are estimates.</p>
+
+  <div class="grid">
+    <div class="card">
+      <h2 style="margin-top:0;">Inputs</h2>
+
+      <label>Purchase price (A$)</label>
+      <input id="price" type="number" value="700000" min="0" step="1000">
+
+      <label>Deposit (%)</label>
+      <input id="depositPct" type="number" value="20" min="0" max="100" step="0.1">
+
+      <label>Interest rate (%)</label>
+      <input id="ratePct" type="number" value="6.5" min="0" step="0.01">
+
+      <label>Loan term (years)</label>
+      <input id="termYears" type="number" value="30" min="1" step="1">
+
+      <label>Weekly rent (A$)</label>
+      <input id="weeklyRent" type="number" value="650" min="0" step="10">
+
+      <label>Vacancy rate (%)</label>
+      <input id="vacancyPct" type="number" value="3" min="0" max="100" step="0.1">
+
+      <label>Property management fee (%)</label>
+      <input id="pmPct" type="number" value="7" min="0" max="100" step="0.1">
+
+      <label>Council rates (annual A$)</label>
+      <input id="ratesAnnual" type="number" value="2200" min="0" step="50">
+
+      <label>Insurance (annual A$)</label>
+      <input id="insuranceAnnual" type="number" value="1400" min="0" step="50">
+
+      <label>Maintenance (annual A$)</label>
+      <input id="maintAnnual" type="number" value="1800" min="0" step="50">
+
+      <div style="margin-top:12px;">
+        <button class="cta" id="calcBtn">Calculate</button>
+        <p class="muted small" style="margin-top:8px;">
+          Tip: keep it conservative. Underestimate rent, overestimate costs.
+        </p>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 style="margin-top:0;">Results</h2>
+      <div id="verdict" class="badge mid">Enter numbers and calculate</div>
+
+      <div class="results" style="margin-top:12px;">
+        <div class="card" style="box-shadow:none;">
+          <strong>Loan & Mortgage</strong>
+          <div class="row"><span>Loan amount</span><span id="loanAmt">-</span></div>
+          <div class="row"><span>Monthly repayment (P&amp;I)</span><span id="monthlyPay">-</span></div>
+          <div class="row"><span>Annual mortgage cost</span><span id="annualMortgage">-</span></div>
+        </div>
+
+        <div class="card" style="box-shadow:none;">
+          <strong>Income & Costs</strong>
+          <div class="row"><span>Annual rent (after vacancy)</span><span id="annualRentNet">-</span></div>
+          <div class="row"><span>Annual expenses (non-mortgage)</span><span id="annualExpenses">-</span></div>
+          <div class="row"><span>Break-even weekly rent</span><span id="breakEvenRent">-</span></div>
+        </div>
+
+        <div class="card" style="box-shadow:none; grid-column: 1 / -1;">
+          <strong>Cashflow</strong>
+          <div class="row"><span>Annual cashflow</span><span id="annualCashflow">-</span></div>
+          <div class="row"><span>Monthly cashflow</span><span id="monthlyCashflow">-</span></div>
+        </div>
+      </div>
+
+      <p class="muted small" style="margin-top:12px;">
+        Disclaimer: estimates only. Not financial advice. Rates, fees, and tax outcomes vary.
+      </p>
+    </div>
+  </div>
+
+<script>
+  const fmt = (n) => n.toLocaleString("en-AU", { style: "currency", currency: "AUD", maximumFractionDigits: 0 });
+
+  function monthlyPayment(principal, annualRate, years) {
+    const r = (annualRate / 100) / 12;
+    const n = years * 12;
+    if (r === 0) return principal / n;
+    return principal * (r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1);
+  }
+
+  function calc() {
+    const price = +document.getElementById("price").value || 0;
+    const depositPct = +document.getElementById("depositPct").value || 0;
+    const ratePct = +document.getElementById("ratePct").value || 0;
+    const termYears = +document.getElementById("termYears").value || 30;
+
+    const weeklyRent = +document.getElementById("weeklyRent").value || 0;
+    const vacancyPct = +document.getElementById("vacancyPct").value || 0;
+    const pmPct = +document.getElementById("pmPct").value || 0;
+
+    const ratesAnnual = +document.getElementById("ratesAnnual").value || 0;
+    const insuranceAnnual = +document.getElementById("insuranceAnnual").value || 0;
+    const maintAnnual = +document.getElementById("maintAnnual").value || 0;
+
+    const deposit = price * (depositPct / 100);
+    const loan = Math.max(price - deposit, 0);
+
+    const mPay = monthlyPayment(loan, ratePct, termYears);
+    const annualMortgage = mPay * 12;
+
+    const grossAnnualRent = weeklyRent * 52;
+    const annualRentNetVacancy = grossAnnualRent * (1 - (vacancyPct / 100));
+
+    const pmFee = annualRentNetVacancy * (pmPct / 100);
+    const annualExpenses = pmFee + ratesAnnual + insuranceAnnual + maintAnnual;
+
+    const annualCashflow = annualRentNetVacancy - annualMortgage - annualExpenses;
+    const monthlyCashflow = annualCashflow / 12;
+
+    // break-even weekly rent needed after vacancy and PM fee
+    // Let R = weekly rent.
+    // net rent after vacancy = R*52*(1-v)
+    // pm fee = that * pm
+    // net after pm = net*(1-pm)
+    // Need net after pm = annualMortgage + (rates+ins+maint)
+    const v = vacancyPct / 100;
+    const pm = pmPct / 100;
+    const fixedCosts = annualMortgage + (ratesAnnual + insuranceAnnual + maintAnnual);
+    const breakEvenWeekly = (fixedCosts / (52 * (1 - v) * (1 - pm))) || 0;
+
+    // verdict
+    const verdictEl = document.getElementById("verdict");
+    verdictEl.className = "badge " + (annualCashflow > 2000 ? "good" : (annualCashflow >= -2000 ? "mid" : "bad"));
+    verdictEl.textContent =
+      annualCashflow > 2000 ? "🟢 Cashflow Positive (estimate)" :
+      (annualCashflow >= -2000 ? "🟡 Near Break-even (estimate)" : "🔴 Cashflow Negative (estimate)");
+
+    // fill outputs
+    document.getElementById("loanAmt").textContent = fmt(loan);
+    document.getElementById("monthlyPay").textContent = fmt(mPay);
+    document.getElementById("annualMortgage").textContent = fmt(annualMortgage);
+
+    document.getElementById("annualRentNet").textContent = fmt(annualRentNetVacancy);
+    document.getElementById("annualExpenses").textContent = fmt(annualExpenses);
+    document.getElementById("breakEvenRent").textContent = fmt(breakEvenWeekly);
+
+    const cfFmt = (n) => (n < 0 ? "-" + fmt(Math.abs(n)) : fmt(n));
+    document.getElementById("annualCashflow").textContent = cfFmt(annualCashflow);
+    document.getElementById("monthlyCashflow").textContent = cfFmt(monthlyCashflow);
+  }
+
+  document.getElementById("calcBtn").addEventListener("click", calc);
+  // Auto-calc on load:
+  calc();
+</script>
+</body>
+</html>
